@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "$0")" && pwd)"
 ACCENT="mauve"
@@ -15,17 +14,21 @@ sudo dnf install -y \
   zsh git curl unzip \
   eza bat fd-find ripgrep fzf zoxide delta fastfetch \
   alacritty micro ImageMagick \
-  starship \
-  gnome-tweaks papirus-icon-theme \
-  2>/dev/null
+  gnome-tweaks papirus-icon-theme || err "Some packages failed to install"
+
+if ! command -v starship &>/dev/null; then
+  info "Installing starship..."
+  curl -sS https://starship.rs/install.sh | sh -s -- -y || err "Failed to install starship"
+fi
 
 if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
   info "Installing Oh My Zsh..."
-  RUNZSH=no KEEP_ZSHRC=yes sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+  RUNZSH=no KEEP_ZSHRC=yes sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" || err "Failed to install Oh My Zsh"
 fi
 
 ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
 
+info "Installing zsh plugins..."
 [[ -d "$ZSH_CUSTOM/plugins/zsh-autosuggestions" ]] || \
   git clone --depth=1 https://github.com/zsh-users/zsh-autosuggestions "$ZSH_CUSTOM/plugins/zsh-autosuggestions"
 
@@ -41,8 +44,7 @@ mkdir -p "$FONT_DIR"
 if ! fc-list | grep -qi "JetBrainsMono Nerd"; then
   TMP=$(mktemp -d)
   curl -sL "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz" -o "$TMP/jbm.tar.xz"
-  tar -xf "$TMP/jbm.tar.xz" -C "$FONT_DIR"
-  fc-cache -f
+  tar -xf "$TMP/jbm.tar.xz" -C "$FONT_DIR" && fc-cache -f || err "Failed to install font"
   rm -rf "$TMP"
 fi
 
@@ -77,8 +79,12 @@ if ! ls "$THEME_DIR" 2>/dev/null | grep -qi catppuccin; then
   TMP=$(mktemp -d)
   RELEASE_URL="https://github.com/catppuccin/gtk/releases/latest"
   LATEST=$(curl -sI "$RELEASE_URL" | grep -i ^location | awk -F/ '{print $NF}' | tr -d '\r\n')
-  curl -sL "https://github.com/catppuccin/gtk/releases/download/${LATEST}/catppuccin-mocha-${ACCENT}-standard+default.zip" -o "$TMP/theme.zip"
-  unzip -qo "$TMP/theme.zip" -d "$THEME_DIR" 2>/dev/null || true
+  if [[ -n "$LATEST" ]]; then
+    curl -sL "https://github.com/catppuccin/gtk/releases/download/${LATEST}/catppuccin-mocha-${ACCENT}-standard+default.zip" -o "$TMP/theme.zip"
+    unzip -qo "$TMP/theme.zip" -d "$THEME_DIR" || err "Failed to extract GTK theme"
+  else
+    err "Could not find latest GTK theme release"
+  fi
   rm -rf "$TMP"
 fi
 
@@ -88,7 +94,7 @@ mkdir -p "$ICON_DIR"
 if [[ ! -d "$ICON_DIR/catppuccin-mocha-${ACCENT}-cursors" ]]; then
   TMP=$(mktemp -d)
   curl -sL "https://github.com/catppuccin/cursors/releases/latest/download/catppuccin-mocha-${ACCENT}-cursors.zip" -o "$TMP/cursors.zip"
-  unzip -qo "$TMP/cursors.zip" -d "$ICON_DIR" 2>/dev/null || true
+  unzip -qo "$TMP/cursors.zip" -d "$ICON_DIR" || err "Failed to extract cursors"
   rm -rf "$TMP"
 fi
 
@@ -98,7 +104,7 @@ if ! command -v papirus-folders &>/dev/null; then
   curl -sL "https://raw.githubusercontent.com/catppuccin/papirus-folders/main/install.sh" -o "$TMP/install.sh"
   if [[ -s "$TMP/install.sh" ]]; then
     [[ -d "$ICON_DIR/Papirus-Dark" ]] || cp -r /usr/share/icons/Papirus-Dark "$ICON_DIR/" 2>/dev/null || true
-    bash "$TMP/install.sh" 2>/dev/null || true
+    bash "$TMP/install.sh" || true
   fi
   rm -rf "$TMP"
 fi
@@ -113,7 +119,7 @@ if [[ ! -f "$WALL" ]] || ! file "$WALL" | grep -q PNG; then
     \( -size 3840x2160 radial-gradient:"#313244-none" -gravity SouthEast \) -compose over -composite \
     \( -size 3840x2160 radial-gradient:"rgba(203,166,247,0.15)-none" -gravity NorthWest \) -compose over -composite \
     \( -size 3840x2160 radial-gradient:"rgba(137,180,250,0.08)-none" -gravity SouthEast \) -compose over -composite \
-    "$WALL" 2>/dev/null || true
+    "$WALL" || err "Failed to generate wallpaper"
 fi
 
 info "Applying GNOME settings..."
@@ -142,7 +148,7 @@ sudo flatpak override --filesystem=xdg-config/gtk-4.0:ro --filesystem=xdg-config
 
 if [[ "$SHELL" != *zsh ]]; then
   info "Setting zsh as default shell..."
-  chsh -s "$(which zsh)"
+  chsh -s "$(which zsh)" || err "Failed to set zsh as default shell"
 fi
 
 ok "Done. Log out and back in for full effect."

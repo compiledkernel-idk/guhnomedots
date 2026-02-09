@@ -19,7 +19,7 @@ Catppuccin Mocha everywhere. Fedora + GNOME.
 ## Install
 
 ```
-git clone https://github.com/YOUR_USER/dotfiles ~/dotfiles
+git clone https://github.com/compiledkernel-idk/guhnomedots ~/dotfiles
 cd ~/dotfiles
 chmod +x install.sh
 ./install.sh
